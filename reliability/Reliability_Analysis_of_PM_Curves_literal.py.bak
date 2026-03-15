@@ -1,0 +1,111 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+from scipy.stats import norm
+import pandas as pd
+import os
+from pathlib import Path
+
+# Import local generators; these files must exist in the same folder
+# package-relative imports (sibling modules inside `reliability/`)
+try:
+    from .generate_PM_True_Capacity_literal import generate_PM_True_Capacity
+    from .generate_PM_IS456_nd_uncertain_literal import generate_PM_IS456_nd_uncertain
+    from .generate_PM_ACI318_nd_uncertain_literal import generate_PM_ACI318_nd_uncertain
+    from .generate_PM_EC2_nd_uncertain_literal import generate_PM_EC2_nd_uncertain
+except Exception as e:
+    raise ImportError("Reliability helper modules missing or failing to import: " + str(e))
+
+
+def main():
+    # Working directory should be static/plots when called from the web app
+    OUT = Path.cwd()
+
+    N = 10  # reduced for speed in web demo; change to 1000 for full runs
+    p = 2; n = 3; nbars_total = 8
+
+    fck_nom = 30.0
+    fy_nom = 415.0
+    Es_nom = 200000.0
+
+    rng = np.random.default_rng()
+    fck_vals = fck_nom + 5 * rng.standard_normal(N)
+    fy_vals = fy_nom + 25 * rng.standard_normal(N)
+
+    # grid for nondimensional example
+    mu_range = np.linspace(0, 10, 50)
+    pu_range = np.linspace(0, 50, 50)
+    MU, PU = np.meshgrid(mu_range, pu_range)
+    failure_counts_comb = np.zeros_like(MU)
+
+    # For each sample, compute true PM and mark failures where test point is beyond true curve
+    for i in range(N):
+        fck = float(fck_vals[i])
+        fy = float(fy_vals[i])
+        try:
+            MuR, PuR, _, _ = generate_PM_True_Capacity(fck, fy, Es_nom, p, n, nbars_total)
+        except Exception:
+            # skip sample if generator fails
+            continue
+        # need monotonic PuR for interpolation
+        valid = (~np.isnan(PuR)) & (~np.isnan(MuR))
+        if np.sum(valid) < 2:
+            continue
+        Pu_v = PuR[valid]
+        Mu_v = MuR[valid]
+        # sort by Pu (increasing)
+        order = np.argsort(Pu_v)
+        Pu_sorted = Pu_v[order]
+        Mu_sorted = Mu_v[order]
+        # interp Mu capacity for every Pu on grid
+        from scipy.interpolate import interp1d
+        f_interp = interp1d(Pu_sorted, Mu_sorted, bounds_error=False, fill_value=(Mu_sorted[0], Mu_sorted[-1]))
+        # flatten grid Pu and evaluate Mu capacity
+        Pu_flat = PU.flatten()
+        Mu_cap_flat = f_interp(Pu_flat)
+        Mu_test_flat = MU.flatten()
+        # failure if Mu_test > Mu_cap
+        fail_flags = (Mu_test_flat > Mu_cap_flat)
+        failure_counts_comb.flat[:] += fail_flags.astype(int)
+
+    # probability
+    failure_prob_comb = failure_counts_comb / N
+
+    # save fragility curves for five salient points using nominal KeyPoints
+    Mu_nom, Pu_nom, _, KeyPoints = generate_PM_True_Capacity(fck_nom, fy_nom, Es_nom, p, n, nbars_total)
+    pts = ['PureAxial','AxialLimit','FullCompression','BalancedFailure','PureBending']
+    Mu_frag = np.arange(0, 10.01, 0.01)
+    Fragility_comb = []
+    for k in pts:
+        if k in KeyPoints:
+            Pu_fixed = KeyPoints[k]['Pu']
+            # query failure_prob_comb at (Mu_frag, Pu_fixed)
+            from scipy.interpolate import griddata
+            Pf_vals = []
+            for mu_val in Mu_frag:
+                val = griddata((MU.flatten(), PU.flatten()), failure_prob_comb.flatten(), (mu_val, Pu_fixed), method='linear')
+                Pf_vals.append(float(val) if val is not None else 0.0)
+            Fragility_comb.append(np.column_stack((Mu_frag, Pf_vals)))
+    # Save first fragility as example excel (flatten into columns)
+    if len(Fragility_comb) > 0:
+        # create a wide table: Mu | Pf1 | Pf2 | ...
+        table = {'Mu': Mu_frag}
+        for idx, arr in enumerate(Fragility_comb):
+            table[f'Pf_{idx}'] = arr[:,1]
+        df = pd.DataFrame(table)
+        df.to_excel(OUT / "Fragility_combined.xlsx", index=False)
+
+    # save a reliability map (beta)
+    epsP = 1e-6
+    PfC = np.clip(failure_prob_comb, epsP, 1-epsP)
+    BetaC = norm.ppf(1 - PfC)
+    fig, ax = plt.subplots(figsize=(8,6))
+    ctf = ax.contourf(MU, PU, BetaC, levels=20)
+    plt.colorbar(ctf, ax=ax)
+    ax.set_xlabel('Non-dimensional Moment (M_u/bD^2)')
+    ax.set_ylabel('Non-dimensional Axial Load (P_u/bD)')
+    ax.set_title('Beta Map (combined)')
+    ax.grid(True)
+    fig.savefig(OUT / "ReliabilityIndex_combined.png", dpi=300)
+    plt.close(fig)
+    print("Saved ReliabilityIndex_combined.png and Fragility_combined.xlsx in", OUT)

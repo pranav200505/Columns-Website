@@ -1,0 +1,162 @@
+import matplotlib
+matplotlib.use('Agg')
+import numpy as np
+from scipy.interpolate import interp1d
+
+def generate_PM_EC2_nd_uncertain(fck, fy, Es, p, n, nbars_total):
+    """
+    Literal translation of MATLAB function generate_PM_EC2_nd_uncertain.m
+    """
+
+    # Constants
+    EffCover_by_D = 0.1
+    xu_max_by_D = 10
+    step = 0.01
+
+    # Step 1: Steel layout
+    y_by_D = np.linspace(1 - EffCover_by_D, EffCover_by_D, n)
+    k = np.zeros(n)
+    bars_used = 0
+    if n > 2:
+        for i in range(1, n-1):  # MATLAB 2:n-1
+            k[i] = 2
+            bars_used += 2
+    remaining_bars = nbars_total - bars_used
+    k[0] = remaining_bars / 2
+    k[-1] = remaining_bars / 2
+    k = k / nbars_total
+
+    # Step 2: Eurocode parameters
+    if fck <= 50:
+        lam = 0.8
+        eeta = 1.0
+    else:
+        lam = 0.8 - (fck - 50) / 400.0
+        eeta = 1.0 - (fck - 50) / 200.0
+
+    fcd = 0.85 * fck / 1.5
+    fyd = fy / 1.15
+    eyd = fyd / Es
+
+    # Step 3: Find xu_min_by_D
+    xu_min_by_D = 0.01
+    increment = 0.0001
+    tolerance = 1e-4
+    PuR_trial = -10
+
+    while abs(PuR_trial) > tolerance:
+        a_by_D = lam * xu_min_by_D
+        Cc = eeta * a_by_D * fcd
+        Mc = Cc * (0.5 - 0.5 * a_by_D)
+        Cs = 0
+        Ms = 0
+        for j in range(n):
+            es = 0.0035 * (xu_min_by_D - y_by_D[j]) / xu_min_by_D
+            if abs(es) < eyd:
+                fs = Es * es
+            else:
+                fs = np.sign(es) * fyd
+            fc = (eeta * fcd) if (es > 0) else 0
+            Cs += (fs - fc) * k[j] * p / 100
+            Ms += (fs - fc) * k[j] * p * (0.5 - y_by_D[j]) / 100
+        PuR_trial = Cc + Cs
+        if PuR_trial < 0:
+            xu_min_by_D = xu_min_by_D + increment
+        else:
+            xu_min_by_D = xu_min_by_D - increment/2
+            increment = increment/2
+
+    # Step 4: Generate P-M curve
+    xu_by_D = []
+    PuR = []
+    MuR = []
+
+    KeyPoints = {}
+    KeyPoints['BalancedFailure'] = {'Mu': np.nan, 'Pu': np.nan}
+    foundBalanced = False
+    tolBF = 1e-3
+
+    xu = xu_min_by_D
+    while xu <= xu_max_by_D + 1e-12:
+        a_by_D = lam * xu
+        if a_by_D < 1:
+            Cc = eeta * a_by_D * fcd
+            Mc = Cc * (0.5 - 0.5 * a_by_D)
+        else:
+            Cc = eeta * fcd
+            Mc = 0
+
+        Cs = 0
+        Ms = 0
+        es_bottom = 0
+        for j in range(n):
+            if xu <= 1:
+                es = 0.0035 * (xu - y_by_D[j]) / xu
+            else:
+                es = 0.00175 * (xu - y_by_D[j]) / (xu - 3/7)
+            if j == 0:
+                es_bottom = es
+            if abs(es) < eyd:
+                fs = Es * es
+            else:
+                fs = np.sign(es) * fyd
+            fc = (eeta * fcd) if (es > 0) else 0
+            Cs += (fs - fc) * k[j] * p / 100
+            Ms += (fs - fc) * k[j] * p * (0.5 - y_by_D[j]) / 100
+        Pu = Cc + Cs
+        Mu = Mc + Ms
+
+        if not foundBalanced and abs(es_bottom + eyd) <= tolBF and es_bottom < 0:
+            KeyPoints['BalancedFailure'] = {'Mu': Mu, 'Pu': Pu}
+            foundBalanced = True
+
+        xu_by_D.append(xu)
+        PuR.append(Pu)
+        MuR.append(Mu)
+
+        xu += step
+
+    # Extend to Mu=0
+    if len(MuR) >= 2:
+        Mu1, Mu2 = MuR[-2], MuR[-1]
+        Pu1, Pu2 = PuR[-2], PuR[-1]
+        if Mu2 != Mu1:
+            slope = (Pu2 - Pu1) / (Mu2 - Mu1)
+            Pu_at_Mu0 = Pu2 + slope * (0 - Mu2)
+            MuR.append(0)
+            PuR.append(Pu_at_Mu0)
+            xu_by_D.append(np.nan)
+
+    MuR = np.array(MuR)
+    PuR = np.array(PuR)
+    xu_by_D = np.array(xu_by_D)
+
+    # Step 5: Extract Key Points
+    Pu_max = np.max(PuR)
+    KeyPoints['PureAxial'] = {'Mu': float(MuR[np.argmax(PuR)]), 'Pu': float(Pu_max)}
+
+    Pu_design = 0.9 * Pu_max
+    idxP2 = np.argmin(np.abs(PuR - Pu_design))
+    KeyPoints['AxialLimit'] = {'Mu': float(MuR[idxP2]), 'Pu': float(PuR[idxP2])}
+
+    finite_idx = np.isfinite(xu_by_D) & np.isfinite(MuR) & np.isfinite(PuR)
+    xu_clean = xu_by_D[finite_idx]
+    Mu_clean = MuR[finite_idx]
+    Pu_clean = PuR[finite_idx]
+    if len(np.unique(xu_clean)) >= 2:
+        f_interp_Mu = interp1d(xu_clean, Mu_clean, kind='linear', fill_value='extrapolate')
+        f_interp_Pu = interp1d(xu_clean, Pu_clean, kind='linear', fill_value='extrapolate')
+        KeyPoints['FullCompression'] = {'Mu': float(f_interp_Mu(1.0)), 'Pu': float(f_interp_Pu(1.0))}
+    else:
+        KeyPoints['FullCompression'] = {'Mu': np.nan, 'Pu': np.nan}
+
+    idx5 = np.argmin(np.abs(PuR))
+    KeyPoints['PureBending'] = {'Mu': float(MuR[idx5]), 'Pu': float(PuR[idx5])}
+
+    return MuR, PuR, xu_by_D, KeyPoints
+
+if __name__ == "__main__":
+    MuR, PuR, xu_by_D, KeyPoints = generate_PM_EC2_nd_uncertain(30, 415, 200000, 2, 3, 8)
+    print("First 5 MuR:", MuR[:5])
+    print("First 5 PuR:", PuR[:5])
+    print("KeyPoints keys:", list(KeyPoints.keys()))
