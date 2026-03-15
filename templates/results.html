@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Results</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .result-section { margin-bottom: 32px; }
+    .result-section h3 { border-bottom: 2px solid #ddd; padding-bottom: 6px; color: #333; }
+    .plot-img { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; margin-top: 10px; }
+    .hist-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
+    .hist-grid img { max-width: 320px; flex: 1 1 280px; border: 1px solid #ddd; border-radius: 6px; }
+    .summary-table { border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+    .summary-table td, .summary-table th {
+      border: 1px solid #ddd; padding: 6px 14px; text-align: left;
+    }
+    .summary-table th { background: #f0f4ff; font-weight: 600; }
+    .error-box { padding: 12px; border: 1px solid #f5c6cb; background: #f8d7da;
+                 color: #721c24; margin-bottom: 16px; border-radius: 4px; }
+    .tag-beta { background: #1e4fa3; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.78rem; }
+    .tag-pf   { background: #a33a1e; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.78rem; }
+    .tag-hist { background: #2e8b57; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.78rem; }
+    .download-btn {
+      display: inline-block; margin-top: 10px; padding: 8px 18px;
+      background: #1e4fa3; color: #fff; border-radius: 4px;
+      text-decoration: none; font-size: 0.9rem;
+    }
+    .download-btn:hover { background: #163a82; }
+    .results-text p { margin: 6px 0; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>Results</h2>
+
+  {% if error %}
+    <div class="error-box"><strong>Error:</strong> {{ error }}</div>
+  {% endif %}
+
+  {# ── PM Curve results ──────────────────────────────────────────────── #}
+  {% if pm_image %}
+  <div class="result-section">
+    <h3>P-M Interaction Curve</h3>
+    <img src="{{ url_for('static', filename='plots/' + pm_image) }}" class="plot-img">
+
+    <div class="results-text">
+      {% if mu_at_P %}
+        <p><strong>Interpolated M<sub>u</sub> at provided P:</strong>
+          {{ mu_at_P | round(3) }} kN·m
+          {% if nondim %}
+            (nondimensional = {{ (mu_at_P * 10**6 / (f_ck * b * D**2)) | round(6) }})
+          {% endif %}
+        </p>
+      {% endif %}
+      {% if mu_max %}
+        <p><strong>Maximum M<sub>u</sub> on curve:</strong> {{ mu_max | round(3) }} kN·m
+          {% if nondim %}
+            (nondimensional = {{ (mu_max * 10**6 / (f_ck * b * D**2)) | round(6) }})
+          {% endif %}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if section_image %}
+  <div class="result-section">
+    <h3>Cross-Section Schematic</h3>
+    <img src="{{ url_for('static', filename='plots/' + section_image) }}" class="plot-img"
+         style="max-width: 340px;">
+  </div>
+  {% endif %}
+
+  {# ── Reliability results ───────────────────────────────────────────── #}
+  {% if rel_summary %}
+  <div class="result-section">
+    <h3>Simulation Summary</h3>
+    <table class="summary-table">
+      <tr><th>Parameter</th><th>Value</th></tr>
+      <tr><td>Monte Carlo samples (N)</td><td>{{ rel_summary.N }}</td></tr>
+      <tr><td>f<sub>ck</sub></td><td>{{ rel_summary.fck }}</td></tr>
+      <tr><td>f<sub>y</sub></td><td>{{ rel_summary.fy }}</td></tr>
+      <tr><td>p (rebar ratio)</td><td>{{ rel_summary.p }}</td></tr>
+      <tr><td>Computation time</td><td>{{ rel_summary.elapsed }}</td></tr>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if beta_image %}
+  <div class="result-section">
+    <h3><span class="tag-beta">β</span> Reliability Index Heatmap</h3>
+    <p style="color:#555; font-size:0.88rem;">
+      Higher β = safer. Typical target values: β ≥ 3.5 (structural members), β ≥ 4.0 (critical).
+      The dark purple zones show where failure is most likely under the given uncertainty.
+    </p>
+    <img src="{{ url_for('static', filename='plots/' + beta_image) }}" class="plot-img">
+  </div>
+  {% endif %}
+
+  {% if pf_image %}
+  <div class="result-section">
+    <h3><span class="tag-pf">Pf</span> Failure Probability Heatmap</h3>
+    <p style="color:#555; font-size:0.88rem;">
+      Probability of failure at each (M, P) point in the P-M space.
+      Red zones indicate high failure probability under the sampled material uncertainty.
+    </p>
+    <img src="{{ url_for('static', filename='plots/' + pf_image) }}" class="plot-img">
+  </div>
+  {% endif %}
+
+  {% if hist_images %}
+  <div class="result-section">
+    <h3><span class="tag-hist">Hist</span> Sampled Distributions</h3>
+    <p style="color:#555; font-size:0.88rem;">
+      Histograms of the Monte Carlo samples drawn for each uncertain parameter.
+    </p>
+    <div class="hist-grid">
+      {% for img in hist_images %}
+        <img src="{{ url_for('static', filename='plots/' + img) }}">
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if excel_link %}
+  <div class="result-section">
+    <a class="download-btn" href="{{ excel_link }}">⬇ Download Fragility Grid (Excel)</a>
+    <p style="font-size: 0.82rem; color: #888; margin-top: 6px;">
+      Rows = axial load (P), columns = moment (M), values = Pf at each grid point.
+    </p>
+  </div>
+  {% endif %}
+
+  <div style="margin-top: 24px; display: flex; gap: 20px;">
+    <a href="{{ url_for('index') }}">← Home</a>
+    <a href="{{ url_for('probabilistic') }}">← Back to Reliability Setup</a>
+  </div>
+</div>
+</body>
+</html>

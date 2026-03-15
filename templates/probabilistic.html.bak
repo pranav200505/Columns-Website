@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Probabilistic Analysis</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+  <h2>Probabilistic Analysis</h2>
+
+  <form action="{{ url_for('run_probabilistic') }}" method="post">
+
+    <div class="form-row">
+      <label>Monte Carlo samples (N)</label>
+      <input type="number" name="N" value="100" min="1" max="2000" step="1" required>
+      <small>(capped at 2000 for safety)</small>
+    </div>
+
+    <fieldset style="margin-top:10px;">
+      <legend>Material statistics</legend>
+      <div class="form-row">
+        <label>f<sub>ck</sub> mean (MPa)</label>
+        <input type="number" name="fck_nom" value="30.0" step="any" required>
+        <label>f<sub>ck</sub> std (MPa)</label>
+        <input type="number" name="fck_std" value="5.0" step="any" required>
+      </div>
+      <div class="form-row" style="margin-top:8px;">
+        <label>f<sub>y</sub> mean (MPa)</label>
+        <input type="number" name="fy_nom" value="415.0" step="any" required>
+        <label>f<sub>y</sub> std (MPa)</label>
+        <input type="number" name="fy_std" value="25.0" step="any" required>
+      </div>
+    </fieldset>
+
+    <fieldset style="margin-top:10px;">
+      <legend>Reinforcement template (fixed)</legend>
+      <div class="form-row">
+        <label>p</label>
+        <input type="number" name="p" value="2" step="1" required>
+        <label>n</label>
+        <input type="number" name="n" value="3" step="1" required>
+        <label>nbars_total</label>
+        <input type="number" name="nbars_total" value="8" step="1" required>
+      </div>
+    </fieldset>
+
+    <div class="form-row" style="margin-top:12px;">
+      <button class="button" type="submit">Run Reliability Simulation</button>
+    </div>
+  </form>
+
+  <div style="margin-top:20px;">
+    <a href="{{ url_for('index') }}">Back</a>
+  </div>
+</div>
+</body>
+</html>

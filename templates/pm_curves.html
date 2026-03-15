@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PM Curves</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .row { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; margin-bottom:12px; }
+    .col { flex:1; min-width:180px; }
+    label { display:block; font-size:0.9rem; margin-bottom:4px; }
+    input[type="text"], input[type="number"], select { width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; }
+    .small { font-size:0.85rem; color:#666; }
+    .actions { margin-top:14px; }
+    .note { margin-top:8px; font-size:0.85rem; color:#333; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>PM Curves</h2>
+
+  <form id="pmForm" action="{{ url_for('run_pm_curves') }}" method="post">
+    <div class="row">
+      <div class="col">
+        <label>Geometry</label>
+        <select id="geometry" name="geometry" onchange="onGeomChange()">
+          <option value="rectangular">Rectangular</option>
+          <option value="circular">Circular</option>
+          <option value="jacketed">Jacketed</option>
+        </select>
+      </div>
+
+      <div class="col">
+        <label>Plot type</label>
+        <select name="plot_type">
+          <option value="dimensional">Dimensional</option>
+          <option value="nondimensional">Non-dimensional</option>
+        </select>
+      </div>
+
+      <div class="col">
+        <label>Material</label>
+        <input name="fck" type="number" value="30" step="0.1" />
+        <div class="small">f<sub>ck</sub> (MPa)</div>
+        <input name="fy" type="number" value="415" step="1" style="margin-top:6px;" />
+        <div class="small">f<sub>y</sub> (MPa)</div>
+      </div>
+    </div>
+
+    <!-- Rectangular inputs -->
+    <div id="rect_inputs" class="row geom-block">
+      <div class="col">
+        <label>B (mm)</label>
+        <input name="b" type="number" value="300" />
+      </div>
+      <div class="col">
+        <label>D (mm)</label>
+        <input name="D" type="number" value="600" />
+      </div>
+      <div class="col">
+        <label>cover (mm)</label>
+        <input name="cover" type="number" value="40" />
+      </div>
+      <div class="col">
+        <label>bar_dia (mm)</label>
+        <input name="bar_dia" type="number" value="16" />
+      </div>
+      <div class="col">
+        <label>num_bars</label>
+        <input name="num_bars" type="number" value="8" />
+      </div>
+    </div>
+
+    <!-- Circular inputs -->
+    <div id="circ_inputs" class="row geom-block" style="display:none;">
+      <div class="col">
+        <label>D_circ (mm)</label>
+        <input name="D_circ" type="number" value="600" />
+      </div>
+      <div class="col">
+        <label>cover_c (mm)</label>
+        <input name="cover_c" type="number" value="40" />
+      </div>
+      <div class="col">
+        <label>bar_dia_c (mm)</label>
+        <input name="bar_dia_c" type="number" value="16" />
+      </div>
+      <div class="col">
+        <label>num_bars_c</label>
+        <input name="num_bars_c" type="number" value="8" />
+      </div>
+    </div>
+
+    <!-- Jacketed inputs -->
+    <div id="jacket_inputs" class="row geom-block" style="display:none;">
+      <div class="col">
+        <label>Core diameter D_core (mm)</label>
+        <input name="D_core" type="number" value="300" />
+      </div>
+      <div class="col">
+        <label>Jacket outer width B_j (mm)</label>
+        <input name="B_j" type="number" value="500" />
+      </div>
+      <div class="col">
+        <label>Jacket outer depth D_j (mm)</label>
+        <input name="D_j" type="number" value="600" />
+      </div>
+      <div class="col">
+        <label>core_cover (mm)</label>
+        <input name="core_cover" type="number" value="30" />
+      </div>
+      <div class="col">
+        <label>jacket_cover (mm)</label>
+        <input name="jacket_cover" type="number" value="40" />
+      </div>
+      <div class="col">
+        <label>core_bar_dia (mm)</label>
+        <input name="core_bar_dia" type="number" value="12" />
+      </div>
+      <div class="col">
+        <label>core_num_bars</label>
+        <input name="core_num_bars" type="number" value="6" />
+      </div>
+      <div class="col">
+        <label>jacket_bar_dia (mm)</label>
+        <input name="jacket_bar_dia" type="number" value="16" />
+      </div>
+      <div class="col">
+        <label>jacket_num_bars</label>
+        <input name="jacket_num_bars" type="number" value="8" />
+      </div>
+
+      <!-- Minimal additions: optional separate material inputs for core and jacket -->
+      <div class="col">
+        <label>Core f<sub>ck</sub> (MPa)</label>
+        <input name="fck_core" type="number" value="" step="0.1" placeholder="leave blank to use global fck" />
+        <div class="small">Optional — override global f<sub>ck</sub> for core</div>
+      </div>
+      <div class="col">
+        <label>Core f<sub>y</sub> (MPa)</label>
+        <input name="fy_core" type="number" value="" step="1" placeholder="leave blank to use global fy" />
+        <div class="small">Optional — override global f<sub>y</sub> for core</div>
+      </div>
+      <div class="col">
+        <label>Jacket f<sub>ck</sub> (MPa)</label>
+        <input name="fck_jacket" type="number" value="" step="0.1" placeholder="leave blank to use global fck" />
+        <div class="small">Optional — override global f<sub>ck</sub> for jacket</div>
+      </div>
+      <div class="col">
+        <label>Jacket f<sub>y</sub> (MPa)</label>
+        <input name="fy_jacket" type="number" value="" step="1" placeholder="leave blank to use global fy" />
+        <div class="small">Optional — override global f<sub>y</sub> for jacket</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <label>Enter Pu (kN) or non-dimensional Pu* (P/(fck·B·D)).</label>
+        <input name="Pu_input" placeholder="e.g., 100 or 0.1">
+        <div class="small">If Non-dimensional chosen, Pu_input is interpreted as P*.</div>
+      </div>
+      <div class="col">
+        <label>Es (MPa)</label>
+        <input name="Es" type="number" value="200000" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="button" type="submit">Generate PM Curve</button>
+      <a class="button" style="background:#28a745; margin-left:12px;" href="{{ url_for('index') }}">Cancel</a>
+    </div>
+
+    <div class="note">
+      Note: only inputs relevant to the chosen geometry are sent to the server.
+    </div>
+  </form>
+</div>
+
+<script>
+function q(sel){ return document.querySelector(sel); }
+function onGeomChange(){
+  const g = q('#geometry').value;
+  // hide all
+  document.querySelectorAll('.geom-block').forEach(el=>el.style.display='none');
+  if(g === 'rectangular'){ q('#rect_inputs').style.display = 'flex'; }
+  else if(g === 'circular'){ q('#circ_inputs').style.display = 'flex'; }
+  else if(g === 'jacketed'){ q('#jacket_inputs').style.display = 'flex'; }
+}
+// initialize
+onGeomChange();
+</script>
+</body>
+</html>
