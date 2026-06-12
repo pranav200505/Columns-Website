@@ -1,140 +1,189 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Results</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    .result-section { margin-bottom: 32px; }
-    .result-section h3 { border-bottom: 2px solid #ddd; padding-bottom: 6px; color: #333; }
-    .plot-img { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; margin-top: 10px; }
-    .hist-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
-    .hist-grid img { max-width: 320px; flex: 1 1 280px; border: 1px solid #ddd; border-radius: 6px; }
-    .summary-table { border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
-    .summary-table td, .summary-table th {
-      border: 1px solid #ddd; padding: 6px 14px; text-align: left;
-    }
-    .summary-table th { background: #f0f4ff; font-weight: 600; }
-    .error-box { padding: 12px; border: 1px solid #f5c6cb; background: #f8d7da;
-                 color: #721c24; margin-bottom: 16px; border-radius: 4px; }
-    .tag-beta { background: #1e4fa3; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.78rem; }
-    .tag-pf   { background: #a33a1e; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.78rem; }
-    .tag-hist { background: #2e8b57; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.78rem; }
-    .download-btn {
-      display: inline-block; margin-top: 10px; padding: 8px 18px;
-      background: #1e4fa3; color: #fff; border-radius: 4px;
-      text-decoration: none; font-size: 0.9rem;
-    }
-    .download-btn:hover { background: #163a82; }
-    .results-text p { margin: 6px 0; font-size: 0.95rem; }
-  </style>
-</head>
-<body>
-<div class="container">
-  <h2>Results</h2>
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
 
-  {% if error %}
-    <div class="error-box"><strong>Error:</strong> {{ error }}</div>
-  {% endif %}
+{% block content %}
+<div class="page-head">
+  <h1>{% if kind == 'reliability' %}Reliability Results{% else %}P–M Curve Results{% endif %}</h1>
+</div>
 
-  {# ── PM Curve results ──────────────────────────────────────────────── #}
-  {% if pm_image %}
-  <div class="result-section">
-    <h3>P-M Interaction Curve</h3>
-    <img src="{{ url_for('static', filename='plots/' + pm_image) }}" class="plot-img">
+{% if error %}
+<div class="error-box">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex:0 0 auto; margin-top:1px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+  <div><strong>Error:</strong> {{ error }}</div>
+</div>
+{% endif %}
 
-    <div class="results-text">
-      {% if mu_at_P %}
-        <p><strong>Interpolated M<sub>u</sub> at provided P:</strong>
-          {{ mu_at_P | round(3) }} kN·m
-          {% if nondim %}
-            (nondimensional = {{ (mu_at_P * 10**6 / (f_ck * b * D**2)) | round(6) }})
-          {% endif %}
-        </p>
-      {% endif %}
-      {% if mu_max %}
-        <p><strong>Maximum M<sub>u</sub> on curve:</strong> {{ mu_max | round(3) }} kN·m
-          {% if nondim %}
-            (nondimensional = {{ (mu_max * 10**6 / (f_ck * b * D**2)) | round(6) }})
-          {% endif %}
-        </p>
-      {% endif %}
+{# ── PM Curve results ──────────────────────────────────────────────── #}
+{% if pm_image %}
+
+{% if params %}
+<div class="result-summary">
+  {% for k, v in params %}
+  <div class="summary-chip">
+    <div class="k">{{ k }}</div>
+    <div class="v">{{ v }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="result-section">
+  <div class="plot-frame">
+    <img src="{{ url_for('static', filename='plots/' + pm_image) }}" alt="P-M interaction curve">
+    <div class="plot-actions">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('static', filename='plots/' + pm_image) }}"
+         download="pm_curve.png">⬇ Download PNG</a>
     </div>
-  </div>
-  {% endif %}
-
-  {% if section_image %}
-  <div class="result-section">
-    <h3>Cross-Section Schematic</h3>
-    <img src="{{ url_for('static', filename='plots/' + section_image) }}" class="plot-img"
-         style="max-width: 340px;">
-  </div>
-  {% endif %}
-
-  {# ── Reliability results ───────────────────────────────────────────── #}
-  {% if rel_summary %}
-  <div class="result-section">
-    <h3>Simulation Summary</h3>
-    <table class="summary-table">
-      <tr><th>Parameter</th><th>Value</th></tr>
-      <tr><td>Monte Carlo samples (N)</td><td>{{ rel_summary.N }}</td></tr>
-      <tr><td>f<sub>ck</sub></td><td>{{ rel_summary.fck }}</td></tr>
-      <tr><td>f<sub>y</sub></td><td>{{ rel_summary.fy }}</td></tr>
-      <tr><td>p (rebar ratio)</td><td>{{ rel_summary.p }}</td></tr>
-      <tr><td>Computation time</td><td>{{ rel_summary.elapsed }}</td></tr>
-    </table>
-  </div>
-  {% endif %}
-
-  {% if beta_image %}
-  <div class="result-section">
-    <h3><span class="tag-beta">β</span> Reliability Index Heatmap</h3>
-    <p style="color:#555; font-size:0.88rem;">
-      Higher β = safer. Typical target values: β ≥ 3.5 (structural members), β ≥ 4.0 (critical).
-      The dark purple zones show where failure is most likely under the given uncertainty.
-    </p>
-    <img src="{{ url_for('static', filename='plots/' + beta_image) }}" class="plot-img">
-  </div>
-  {% endif %}
-
-  {% if pf_image %}
-  <div class="result-section">
-    <h3><span class="tag-pf">Pf</span> Failure Probability Heatmap</h3>
-    <p style="color:#555; font-size:0.88rem;">
-      Probability of failure at each (M, P) point in the P-M space.
-      Red zones indicate high failure probability under the sampled material uncertainty.
-    </p>
-    <img src="{{ url_for('static', filename='plots/' + pf_image) }}" class="plot-img">
-  </div>
-  {% endif %}
-
-  {% if hist_images %}
-  <div class="result-section">
-    <h3><span class="tag-hist">Hist</span> Sampled Distributions</h3>
-    <p style="color:#555; font-size:0.88rem;">
-      Histograms of the Monte Carlo samples drawn for each uncertain parameter.
-    </p>
-    <div class="hist-grid">
-      {% for img in hist_images %}
-        <img src="{{ url_for('static', filename='plots/' + img) }}">
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  {% if excel_link %}
-  <div class="result-section">
-    <a class="download-btn" href="{{ excel_link }}">⬇ Download Fragility Grid (Excel)</a>
-    <p style="font-size: 0.82rem; color: #888; margin-top: 6px;">
-      Rows = axial load (P), columns = moment (M), values = Pf at each grid point.
-    </p>
-  </div>
-  {% endif %}
-
-  <div style="margin-top: 24px; display: flex; gap: 20px;">
-    <a href="{{ url_for('index') }}">← Home</a>
-    <a href="{{ url_for('probabilistic') }}">← Back to Reliability Setup</a>
   </div>
 </div>
-</body>
-</html>
+
+{% if mu_at_P is not none or mu_max is not none or bf_plot %}
+<div class="result-section">
+  <div class="card">
+    <h3><span class="dot"></span>Key values</h3>
+    <table class="value-table">
+      <tr><th>Quantity</th><th>Dimensional</th><th>Non-dimensional</th></tr>
+      {% if mu_at_P is not none %}
+      <tr>
+        <td>Moment capacity M<sub>u</sub> at the stated load P</td>
+        <td class="num">{{ mu_at_P | round(2) }} kN·m</td>
+        <td class="num">{{ (mu_at_P_nd | round(5)) if mu_at_P_nd is not none else '—' }}</td>
+      </tr>
+      {% endif %}
+      {% if mu_max is not none %}
+      <tr>
+        <td>Maximum M<sub>u</sub> on the curve</td>
+        <td class="num">{{ mu_max | round(2) }} kN·m</td>
+        <td class="num">{{ (mu_max_nd | round(5)) if mu_max_nd is not none else '—' }}</td>
+      </tr>
+      {% endif %}
+      {% if bf_plot %}
+      <tr>
+        <td>Balanced failure point (M, P)</td>
+        <td class="num" colspan="2">
+          ({{ bf_plot[0] | round(4) }}, {{ bf_plot[1] | round(4) }})
+          {{ '' if nondim else ' kN·m, kN' }}
+        </td>
+      </tr>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+{# ── Reliability results ───────────────────────────────────────────── #}
+{% if rel_summary %}
+<div class="result-summary">
+  <div class="summary-chip">
+    <div class="k">Samples</div>
+    <div class="v">{{ rel_summary.N }}</div>
+  </div>
+  {% if rel_summary.n_curves %}
+  <div class="summary-chip">
+    <div class="k">Unique curves</div>
+    <div class="v">{{ rel_summary.n_curves }}</div>
+  </div>
+  {% endif %}
+  <div class="summary-chip">
+    <div class="k">f<sub>ck</sub></div>
+    <div class="v">{{ rel_summary.fck }}</div>
+  </div>
+  <div class="summary-chip">
+    <div class="k">f<sub>y</sub></div>
+    <div class="v">{{ rel_summary.fy }}</div>
+  </div>
+  <div class="summary-chip">
+    <div class="k">p (rebar)</div>
+    <div class="v">{{ rel_summary.p }}</div>
+  </div>
+  <div class="summary-chip">
+    <div class="k">Seed</div>
+    <div class="v">{{ rel_summary.seed }}</div>
+  </div>
+  {% if rel_summary.beta_min is not none %}
+  <div class="summary-chip highlight">
+    <div class="k">β range on grid</div>
+    <div class="v">{{ rel_summary.beta_min | round(2) }} … {{ rel_summary.beta_max | round(2) }}</div>
+  </div>
+  {% endif %}
+  <div class="summary-chip">
+    <div class="k">Compute time</div>
+    <div class="v">{{ rel_summary.elapsed }}</div>
+  </div>
+</div>
+{% endif %}
+
+{% if beta_image %}
+<div class="result-section">
+  <h3 class="mt-0"><span class="tag tag-beta">β</span> Reliability Index Heatmap</h3>
+  <p class="desc">
+    Higher β = safer. Typical targets: β ≥ 3.5 for structural members, β ≥ 4.0 for
+    critical elements. The dark zone beyond the mean capacity curve is where demand
+    exceeds capacity for most samples.
+  </p>
+  <div class="plot-frame">
+    <img src="{{ url_for('static', filename='plots/' + beta_image) }}" alt="Reliability index heatmap">
+    <div class="plot-actions">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('static', filename='plots/' + beta_image) }}"
+         download="reliability_index.png">⬇ Download PNG</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if pf_image %}
+<div class="result-section">
+  <h3 class="mt-0"><span class="tag tag-pf">P<sub>f</sub></span> Failure Probability Heatmap</h3>
+  <p class="desc">
+    Probability that the demanded (M, P) point exceeds the sampled capacity.
+    Red zones indicate a high probability of failure under the given uncertainty.
+  </p>
+  <div class="plot-frame">
+    <img src="{{ url_for('static', filename='plots/' + pf_image) }}" alt="Failure probability heatmap">
+    <div class="plot-actions">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('static', filename='plots/' + pf_image) }}"
+         download="failure_probability.png">⬇ Download PNG</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if hist_images %}
+<div class="result-section">
+  <h3 class="mt-0"><span class="tag tag-hist">Hist</span> Sampled Distributions</h3>
+  <p class="desc">Monte Carlo samples drawn for each uncertain parameter, with the fitted normal density.</p>
+  <div class="hist-grid">
+    {% for img in hist_images %}
+    <div class="plot-frame">
+      <img src="{{ url_for('static', filename='plots/' + img) }}" alt="Sample histogram">
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if excel_link %}
+<div class="result-section">
+  <div class="card" style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:220px;">
+      <strong>Fragility grid (Excel)</strong>
+      <p class="muted" style="margin:4px 0 0; font-size:.84rem;">
+        Rows = axial load P, columns = moment M, values = P<sub>f</sub> at each grid point.
+      </p>
+    </div>
+    <a class="btn btn-primary" href="{{ excel_link }}" download>⬇ Download .xlsx</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="result-actions">
+  {% if kind == 'reliability' %}
+  <a class="btn btn-primary" href="{{ url_for('probabilistic') }}">↺ Run another simulation</a>
+  {% else %}
+  <a class="btn btn-primary" href="{{ url_for('pm_curves') }}">↺ Generate another curve</a>
+  {% endif %}
+  <a class="btn btn-ghost" href="{{ url_for('index') }}">Home</a>
+</div>
+{% endblock %}

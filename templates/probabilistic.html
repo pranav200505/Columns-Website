@@ -1,163 +1,153 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Probabilistic Reliability Analysis</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    .prob-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 16px; }
-    .card h3 { margin: 0 0 12px; font-size: 1rem; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
-    .param-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .param-row label { min-width: 140px; font-size: 0.88rem; }
-    .param-row input[type=number] { width: 80px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
-    .param-row input[type=checkbox] { width: 18px; height: 18px; }
-    .checkbox-label { font-size: 0.85rem; color: #555; }
-    .cov-group { margin-left: 28px; }
-    .hint { font-size: 0.78rem; color: #888; margin-left: 4px; }
-    .submit-row { margin-top: 20px; }
-    .submit-row button { padding: 10px 28px; font-size: 1rem; }
-    .full-width { grid-column: 1 / -1; }
-    .tag-beta { background: #1e4fa3; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.75rem; }
-    .tag-pf   { background: #a33a1e; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.75rem; }
-    .tag-hist { background: #2e8b57; color: #fff; padding: 2px 7px; border-radius: 10px; font-size: 0.75rem; }
-    .section-label { font-weight: 600; font-size: 0.9rem; color: #444; margin: 8px 0 4px; }
-  </style>
-</head>
-<body>
-<div class="container" style="max-width: 880px;">
-  <h2>Probabilistic Reliability Analysis — RC Column</h2>
-  <p style="color:#555; font-size:0.9rem;">
-    Specify nominal column properties and select which parameters to treat as random variables 
-    (via coefficient of variation). The Monte Carlo engine generates hundreds of P-M interaction 
-    curves and computes a <span class="tag-beta">β Reliability Index</span> heatmap, 
-    <span class="tag-pf">Pf Fragility</span> grid, and 
-    <span class="tag-hist">Histograms</span> of sampled distributions.
+{% extends "base.html" %}
+{% block title %}Reliability Analysis{% endblock %}
+{% block page_class %}page-narrow{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Probabilistic Reliability Analysis</h1>
+  <p>
+    Treat material properties as random variables and let the Monte Carlo engine build a
+    population of P–M capacity curves. The result is a
+    <span class="tag tag-beta">β reliability index</span> heatmap, a
+    <span class="tag tag-pf">P<sub>f</sub> fragility</span> grid and
+    <span class="tag tag-hist">histograms</span> of the sampled distributions —
+    with the mean capacity curve overlaid for reference.
   </p>
+</div>
 
-  <form action="{{ url_for('run_probabilistic') }}" method="post">
+{% if error %}
+<div class="error-box">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex:0 0 auto; margin-top:1px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+  <div><strong>Simulation failed.</strong> {{ error }}</div>
+</div>
+{% endif %}
 
-    <div class="prob-grid" style="margin-bottom: 14px;">
-      <div class="card full-width">
-        <h3>Simulation Controls</h3>
-        <div class="param-row">
-          <label>Monte Carlo samples (N)</label>
-          <input type="number" name="N" value="300" min="10" max="5000" step="10" required>
-          <span class="hint">Recommended: 200–1000. More samples = smoother results but slower.</span>
+<form action="{{ url_for('run_probabilistic') }}" method="post"
+      data-busy data-busy-title="Running Monte Carlo simulation"
+      data-busy-msgs="Sampling material properties…|Generating capacity curves for every sample…|Counting failures across the P–M grid…|Computing the reliability index β…|Rendering heatmaps…">
+
+  <div class="card" style="margin-bottom:18px;">
+    <h3><span class="dot"></span>Simulation controls</h3>
+    <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:240px;">
+        <label style="font-size:.8rem; font-weight:600;">Monte Carlo samples (N)</label>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <input type="range" id="N_slider" min="50" max="2000" step="50" value="300">
+          <span class="range-value" id="N_value">300</span>
         </div>
+        <input type="hidden" name="N" id="N_input" value="300">
+        <div class="hint" style="font-size:.76rem; color:var(--muted);">
+          200–1000 recommended — more samples give smoother heatmaps but take longer.
+        </div>
+      </div>
+      <div class="field" style="width:170px;">
+        <label>Random seed <span class="unit">(optional)</span></label>
+        <input type="number" name="seed" placeholder="random" step="1">
+        <div class="hint">Set for reproducible runs</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="prob-grid">
+    <div class="card">
+      <h3><span class="dot"></span>Concrete — f<sub>ck</sub></h3>
+      <div class="field">
+        <label>Mean f<sub>ck</sub> <span class="unit">(MPa)</span></label>
+        <input type="number" name="fck_nom" value="30.0" step="0.5" min="5" required>
+      </div>
+      <div class="switch-row">
+        <label class="switch">
+          <input type="checkbox" name="fck_vary" value="1" checked data-cov-toggle="fck_cov_row">
+          <span class="track"></span>
+        </label>
+        Treat as uncertain
+      </div>
+      <div class="field cov-group" id="fck_cov_row">
+        <label>Coefficient of variation</label>
+        <input type="number" name="fck_cov" value="0.18" step="0.01" min="0.01" max="0.99">
+        <div class="hint">Typical 0.15 – 0.20</div>
       </div>
     </div>
 
-    <div class="prob-grid">
-
-      <div class="card">
-        <h3>Concrete — f<sub>ck</sub></h3>
-        <div class="param-row">
-          <label>Mean f<sub>ck</sub> (MPa)</label>
-          <input type="number" name="fck_nom" value="30.0" step="0.5" min="5" required>
-        </div>
-        <div class="param-row">
-          <label><input type="checkbox" name="fck_vary" value="1" checked id="cb_fck">
-          <span class="checkbox-label"> Treat as uncertain</span></label>
-        </div>
-        <div class="param-row cov-group" id="fck_cov_row">
-          <label>CoV of f<sub>ck</sub></label>
-          <input type="number" name="fck_cov" value="0.18" step="0.01" min="0.01" max="0.99">
-          <span class="hint">Typical 0.15–0.20</span>
-        </div>
+    <div class="card">
+      <h3><span class="dot"></span>Steel — f<sub>y</sub></h3>
+      <div class="field">
+        <label>Mean f<sub>y</sub> <span class="unit">(MPa)</span></label>
+        <input type="number" name="fy_nom" value="415.0" step="5" min="50" required>
       </div>
-
-      <div class="card">
-        <h3>Steel — f<sub>y</sub></h3>
-        <div class="param-row">
-          <label>Mean f<sub>y</sub> (MPa)</label>
-          <input type="number" name="fy_nom" value="415.0" step="5" min="50" required>
-        </div>
-        <div class="param-row">
-          <label><input type="checkbox" name="fy_vary" value="1" checked id="cb_fy">
-          <span class="checkbox-label"> Treat as uncertain</span></label>
-        </div>
-        <div class="param-row cov-group" id="fy_cov_row">
-          <label>CoV of f<sub>y</sub></label>
-          <input type="number" name="fy_cov" value="0.06" step="0.01" min="0.01" max="0.99">
-          <span class="hint">Typical 0.05–0.08</span>
-        </div>
+      <div class="switch-row">
+        <label class="switch">
+          <input type="checkbox" name="fy_vary" value="1" checked data-cov-toggle="fy_cov_row">
+          <span class="track"></span>
+        </label>
+        Treat as uncertain
       </div>
-
-      <div class="card">
-        <h3>Reinforcement — p (%)</h3>
-        <div class="param-row">
-          <label>Mean p (%)</label>
-          <input type="number" name="p_nom" value="2.0" step="0.1" min="0.1" max="8.0" required>
-          <span class="hint">% of gross section</span>
-        </div>
-        <div class="param-row">
-          <label><input type="checkbox" name="p_vary" value="1" id="cb_p">
-          <span class="checkbox-label"> Treat as uncertain</span></label>
-        </div>
-        <div class="param-row cov-group" id="p_cov_row" style="opacity:0.4; pointer-events:none;">
-          <label>CoV of p</label>
-          <input type="number" name="p_cov" value="0.10" step="0.01" min="0.01" max="0.99">
-          <span class="hint">Typical 0.08–0.12</span>
-        </div>
+      <div class="field cov-group" id="fy_cov_row">
+        <label>Coefficient of variation</label>
+        <input type="number" name="fy_cov" value="0.06" step="0.01" min="0.01" max="0.99">
+        <div class="hint">Typical 0.05 – 0.08</div>
       </div>
+    </div>
 
-      <div class="card">
-        <h3>Bar Layout &amp; Modulus (Fixed)</h3>
-        <div class="param-row">
+    <div class="card">
+      <h3><span class="dot"></span>Reinforcement ratio — p</h3>
+      <div class="field">
+        <label>Mean p <span class="unit">(% of gross section)</span></label>
+        <input type="number" name="p_nom" value="2.0" step="0.1" min="0.1" max="8.0" required>
+      </div>
+      <div class="switch-row">
+        <label class="switch">
+          <input type="checkbox" name="p_vary" value="1" data-cov-toggle="p_cov_row">
+          <span class="track"></span>
+        </label>
+        Treat as uncertain
+      </div>
+      <div class="field cov-group" id="p_cov_row">
+        <label>Coefficient of variation</label>
+        <input type="number" name="p_cov" value="0.10" step="0.01" min="0.01" max="0.99">
+        <div class="hint">Typical 0.08 – 0.12</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3><span class="dot"></span>Bar layout &amp; modulus (fixed)</h3>
+      <div class="form-grid">
+        <div class="field">
           <label>Rows of bars (n)</label>
           <input type="number" name="n_rows" value="3" step="1" min="2" max="10" required>
         </div>
-        <div class="param-row">
+        <div class="field">
           <label>Total bars</label>
           <input type="number" name="nbars_total" value="8" step="1" min="4" max="40" required>
         </div>
-        <div class="param-row">
-          <label>E<sub>s</sub> (MPa)</label>
+        <div class="field">
+          <label>E<sub>s</sub> <span class="unit">(MPa)</span></label>
           <input type="number" name="Es" value="200000" step="1000" min="100000" required>
         </div>
       </div>
+    </div>
 
-      <div class="card full-width">
-        <h3>Outputs Produced</h3>
-        <div style="display:flex; gap:24px; flex-wrap:wrap; font-size:0.88rem; color:#444; padding: 4px 0;">
-          <div>✅ <span class="tag-beta">β</span> Reliability Index heatmap over P-M space</div>
-          <div>✅ <span class="tag-pf">Pf</span> Failure probability Excel grid (downloadable)</div>
-          <div>✅ <span class="tag-hist">Hist</span> Distribution histograms per uncertain variable</div>
-          <div>✅ Mean P-M curve overlay on heatmap for reference</div>
-        </div>
-        <p style="font-size: 0.8rem; color: #888; margin: 8px 0 0;">
-          Analysis uses IS456 non-dimensional P-M interaction. All outputs are in nondimensional form.
-          Higher β = safer; the critical zone (low β) shows where failure is most likely.
-        </p>
+    <div class="card full-width">
+      <h3><span class="dot"></span>What you’ll get</h3>
+      <div class="outputs-list">
+        <div><span class="tag tag-beta">β</span> Reliability index heatmap over P–M space</div>
+        <div><span class="tag tag-pf">P<sub>f</sub></span> Failure-probability grid (Excel download)</div>
+        <div><span class="tag tag-hist">Hist</span> Distribution histogram per uncertain variable</div>
+        <div>📈 Mean P–M capacity curve overlaid on the heatmaps</div>
       </div>
-
+      <p class="muted" style="font-size:.8rem; margin:12px 0 0;">
+        The analysis uses the IS 456 non-dimensional P–M formulation. Higher β = safer;
+        typical targets are β ≥ 3.5 for structural members.
+      </p>
     </div>
-
-    <div class="submit-row">
-      <button class="button" type="submit">▶ Run Reliability Simulation</button>
-    </div>
-
-  </form>
-
-  <div style="margin-top: 14px;">
-    <a href="{{ url_for('index') }}">← Back to Home</a>
   </div>
-</div>
 
-<script>
-  function toggleCov(cbId, rowId) {
-    const cb = document.getElementById(cbId);
-    const row = document.getElementById(rowId);
-    if (!cb || !row) return;
-    cb.addEventListener('change', function() {
-      row.style.opacity = this.checked ? '1' : '0.4';
-      row.style.pointerEvents = this.checked ? 'auto' : 'none';
-    });
-  }
-  toggleCov('cb_fck', 'fck_cov_row');
-  toggleCov('cb_fy',  'fy_cov_row');
-  toggleCov('cb_p',   'p_cov_row');
-</script>
-</body>
-</html>
+  <div class="actions-row">
+    <button class="btn btn-primary" type="submit">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      Run Reliability Simulation
+    </button>
+    <a class="btn btn-ghost" href="{{ url_for('index') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

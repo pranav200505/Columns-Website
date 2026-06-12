@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ColumnLab{% endblock %} · ColumnLab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='2' width='24' height='28' rx='4' fill='%234f46e5'/%3E%3Ccircle cx='11' cy='9' r='2.4' fill='white'/%3E%3Ccircle cx='21' cy='9' r='2.4' fill='white'/%3E%3Ccircle cx='11' cy='23' r='2.4' fill='white'/%3E%3Ccircle cx='21' cy='23' r='2.4' fill='white'/%3E%3C/svg%3E">
+  <script>
+    // apply saved theme before first paint to avoid flashing
+    (function(){try{var t=localStorage.getItem('cl-theme');
+      if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
+  </script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{{ url_for('index') }}">
+      <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+        <rect x="4" y="2" width="24" height="28" rx="5" fill="url(#bg)"/>
+        <circle cx="11" cy="9.5" r="2.4" fill="white"/>
+        <circle cx="21" cy="9.5" r="2.4" fill="white"/>
+        <circle cx="11" cy="22.5" r="2.4" fill="white"/>
+        <circle cx="21" cy="22.5" r="2.4" fill="white"/>
+        <defs>
+          <linearGradient id="bg" x1="4" y1="2" x2="28" y2="30">
+            <stop stop-color="#4f46e5"/><stop offset="1" stop-color="#0891b2"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span>ColumnLab<small>RC Column Analysis Suite</small></span>
+    </a>
+    <nav class="nav">
+      <a href="{{ url_for('index') }}" class="{{ 'active' if active == 'home' }}">Home</a>
+      <a href="{{ url_for('pm_curves') }}" class="{{ 'active' if active == 'pm' }}">P–M Curves</a>
+      <a href="{{ url_for('probabilistic') }}" class="{{ 'active' if active == 'prob' }}">Reliability</a>
+    </nav>
+    <button class="theme-btn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="page {% block page_class %}{% endblock %}">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  ColumnLab — P–M interaction &amp; Monte Carlo reliability analysis for reinforced-concrete columns ·
+  IS&nbsp;456 stress-block formulation
+</footer>
+
+<div class="overlay" id="busyOverlay" aria-hidden="true">
+  <div class="overlay-card">
+    <div class="spinner"></div>
+    <h3>Computing</h3>
+    <p>Crunching the numbers…</p>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" aria-hidden="true"><img src="" alt="Enlarged plot"></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
