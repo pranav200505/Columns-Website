@@ -27,6 +27,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+try:
+    from pm_curves._style import apply_theme as _apply_theme
+except Exception:          # standalone execution outside the project root
+    def _apply_theme():
+        pass
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: load a sibling module by file path (avoids import-path issues)
@@ -71,11 +77,16 @@ def _worker_compute_curve(task):
 # ─────────────────────────────────────────────────────────────────────────────
 def _save_histogram(samples, label, unit, out_path, color='steelblue'):
     fig, ax = plt.subplots(figsize=(5, 3.5))
-    ax.hist(samples, bins=30, color=color, edgecolor='white', alpha=0.85)
-    ax.axvline(np.mean(samples), color='crimson', linewidth=1.5,
-               linestyle='--', label=f'mean = {np.mean(samples):.2f}')
+    ax.hist(samples, bins=30, color=color, edgecolor='white', alpha=0.85, density=True)
+    mu, sd = float(np.mean(samples)), float(np.std(samples))
+    if sd > 0:
+        xs = np.linspace(min(samples), max(samples), 250)
+        ax.plot(xs, norm.pdf(xs, mu, sd), color='#0f172a', linewidth=1.6,
+                label=f'N({mu:.1f}, {sd:.2f}²)')
+    ax.axvline(mu, color='crimson', linewidth=1.5,
+               linestyle='--', label=f'mean = {mu:.2f}')
     ax.set_xlabel(f'{label} ({unit})')
-    ax.set_ylabel('Count')
+    ax.set_ylabel('Density')
     ax.set_title(f'Sampled distribution — {label}')
     ax.legend(fontsize=8)
     plt.tight_layout()
@@ -123,6 +134,8 @@ def main(N=300,
     """
 
     t0 = time.time()
+    _apply_theme()
+    run_id = uuid.uuid4().hex[:8]   # unique filenames → no stale browser cache
 
     # ── Output directory ─────────────────────────────────────────────────────
     _THIS_FILE   = Path(__file__).resolve()
@@ -154,16 +167,16 @@ def main(N=300,
     # ── Save histograms ───────────────────────────────────────────────────────
     hist_images = []
     if fck_std > 0:
-        p_fck = OUT / "Hist_fck.png"
-        _save_histogram(fck_samples, 'f_ck', 'MPa', p_fck, color='steelblue')
+        p_fck = OUT / f"Hist_fck_{run_id}.png"
+        _save_histogram(fck_samples, 'f_ck', 'MPa', p_fck, color='#4f46e5')
         hist_images.append(str(p_fck))
     if fy_std > 0:
-        p_fy = OUT / "Hist_fy.png"
-        _save_histogram(fy_samples, 'f_y', 'MPa', p_fy, color='darkorange')
+        p_fy = OUT / f"Hist_fy_{run_id}.png"
+        _save_histogram(fy_samples, 'f_y', 'MPa', p_fy, color='#f59e0b')
         hist_images.append(str(p_fy))
     if p_std > 0:
-        p_p = OUT / "Hist_p.png"
-        _save_histogram(p_samples, 'p', '%', p_p, color='seagreen')
+        p_p = OUT / f"Hist_p_{run_id}.png"
+        _save_histogram(p_samples, 'p', '%', p_p, color='#0891b2')
         hist_images.append(str(p_p))
 
     # ── Build cache keys (quantize to reduce redundant curve computations) ────
@@ -212,12 +225,9 @@ def main(N=300,
             res = _worker_compute_curve(task)
             _store_result(res, results_cache, verbose)
 
-    # ── Auto-detect grid dimensions from generator output ─────────────────────
-    if mu_range is None:
-        mu_range = np.linspace(0.0, 10.0, 50)
-    if pu_range is None:
-        pu_range = np.linspace(0.0, 50.0, 50)
-
+    # ── Fit the evaluation grid to the actual extent of the sampled curves ────
+    # (previously a fixed 0..10 / 0..50 grid was used regardless of the curves,
+    #  wasting most of the grid resolution far outside the capacity envelope)
     all_Mu_max = all_Pu_max = 0.0
     any_curve  = False
     for v in results_cache.values():
@@ -232,18 +242,19 @@ def main(N=300,
             all_Pu_max = cur_pu
         any_curve = True
 
-    if any_curve and (all_Mu_max > 10 * max(1, np.nanmax(mu_range))
-                      or all_Pu_max > 10 * max(1, np.nanmax(pu_range))):
-        MU_vals = np.linspace(0, all_Mu_max * 1.05, len(mu_range))
-        PU_vals = np.linspace(0, all_Pu_max * 1.05, len(pu_range))
-        if verbose:
-            print(f"[reliability] Dimensional grid: Mu 0..{MU_vals[-1]:.3g}, "
-                  f"Pu 0..{PU_vals[-1]:.3g}")
-    else:
-        MU_vals = mu_range
-        PU_vals = pu_range
-        if verbose:
-            print("[reliability] Non-dimensional grid.")
+    if not any_curve:
+        raise RuntimeError("All Monte Carlo curve generations failed — "
+                           "check the input parameters.")
+
+    if mu_range is None:
+        mu_range = np.linspace(0.0, all_Mu_max * 1.15, 60)
+    if pu_range is None:
+        pu_range = np.linspace(0.0, all_Pu_max * 1.15, 60)
+
+    MU_vals = np.asarray(mu_range, dtype=float)
+    PU_vals = np.asarray(pu_range, dtype=float)
+    if verbose:
+        print(f"[reliability] Grid: Mu 0..{MU_vals[-1]:.3g}, Pu 0..{PU_vals[-1]:.3g}")
 
     MU, PU = np.meshgrid(MU_vals, PU_vals)
     failure_counts = np.zeros_like(MU, dtype=int)
@@ -274,9 +285,21 @@ def main(N=300,
     # ── Failure probability grid ──────────────────────────────────────────────
     Pf = failure_counts.astype(float) / max(1, N)
 
+    # ── Mean (nominal) P-M curve for overlay ──────────────────────────────────
+    mean_curve = None
+    try:
+        res_mean = _worker_compute_curve((str(gen_true_path), fck_nom, fy_nom, Es,
+                                          p_nom, int(n), int(nbars_total), 'mean'))
+        if len(res_mean) == 3 and res_mean[1] is not None:
+            Mu_m, Pu_m = res_mean[1], res_mean[2]
+            ok = np.isfinite(Mu_m) & np.isfinite(Pu_m) & (Mu_m >= 0) & (Pu_m >= 0)
+            mean_curve = (Mu_m[ok], Pu_m[ok])
+    except Exception:
+        mean_curve = None
+
     # ── Excel export ──────────────────────────────────────────────────────────
     df = pd.DataFrame(Pf, index=np.round(PU[:, 0], 4), columns=np.round(MU[0, :], 4))
-    frag_path = OUT / "Fragility_combined.xlsx"
+    frag_path = OUT / f"Fragility_{run_id}.xlsx"
     df.to_excel(frag_path, index_label="Pu \\ Mu")
 
     # ── Beta heatmap ──────────────────────────────────────────────────────────
@@ -286,11 +309,18 @@ def main(N=300,
     fig, ax = plt.subplots(figsize=(8, 6))
     ctf = ax.contourf(MU, PU, Beta, levels=20, cmap='viridis')
     plt.colorbar(ctf, ax=ax, label='β (Reliability Index)')
-    ax.set_xlabel('Moment (nondim M/f_ck·b·D²)')
-    ax.set_ylabel('Axial load (nondim P/f_ck·b·D)')
+    if mean_curve is not None:
+        ax.plot(mean_curve[0], mean_curve[1], color='white', linewidth=2.4)
+        ax.plot(mean_curve[0], mean_curve[1], color='#dc2626', linewidth=1.4,
+                label='Mean P-M capacity')
+        ax.legend(loc='upper right')
+    ax.set_xlim(MU_vals[0], MU_vals[-1])
+    ax.set_ylim(PU_vals[0], PU_vals[-1])
+    ax.set_xlabel(r'Moment $M/(b\,D^2)$ [MPa]')
+    ax.set_ylabel(r'Axial load $P/(b\,D)$ [MPa]')
     ax.set_title(f'Reliability Index β — N={N} samples')
     ax.grid(True, alpha=0.3)
-    beta_path = OUT / "ReliabilityIndex_combined.png"
+    beta_path = OUT / f"ReliabilityIndex_{run_id}.png"
     fig.savefig(beta_path, dpi=200)
     plt.close(fig)
 
@@ -298,11 +328,17 @@ def main(N=300,
     fig2, ax2 = plt.subplots(figsize=(8, 6))
     ctf2 = ax2.contourf(MU, PU, Pf, levels=20, cmap='Reds')
     plt.colorbar(ctf2, ax=ax2, label='Probability of Failure Pf')
-    ax2.set_xlabel('Moment (nondim)')
-    ax2.set_ylabel('Axial load (nondim)')
+    if mean_curve is not None:
+        ax2.plot(mean_curve[0], mean_curve[1], color='#0f172a', linewidth=1.8,
+                 linestyle='--', label='Mean P-M capacity')
+        ax2.legend(loc='upper right')
+    ax2.set_xlim(MU_vals[0], MU_vals[-1])
+    ax2.set_ylim(PU_vals[0], PU_vals[-1])
+    ax2.set_xlabel(r'Moment $M/(b\,D^2)$ [MPa]')
+    ax2.set_ylabel(r'Axial load $P/(b\,D)$ [MPa]')
     ax2.set_title(f'Failure Probability Pf — N={N} samples')
     ax2.grid(True, alpha=0.3)
-    pf_path = OUT / "FailureProbability_combined.png"
+    pf_path = OUT / f"FailureProbability_{run_id}.png"
     fig2.savefig(pf_path, dpi=200)
     plt.close(fig2)
 
@@ -312,6 +348,7 @@ def main(N=300,
         for p in [beta_path, pf_path, frag_path] + [Path(h) for h in hist_images]:
             print(f"  → {p.name}")
 
+    finite_beta = Beta[np.isfinite(Beta)]
     return {
         'elapsed_s'     : elapsed,
         'fragility_file': str(frag_path),
@@ -321,6 +358,10 @@ def main(N=300,
         'Pf_grid'       : Pf,
         'MU_grid'       : MU,
         'PU_grid'       : PU,
+        'n_curves'      : len(unique_keys),
+        'beta_min'      : float(finite_beta.min()) if finite_beta.size else None,
+        'beta_max'      : float(finite_beta.max()) if finite_beta.size else None,
+        'pf_max'        : float(np.nanmax(Pf)),
     }
 
 

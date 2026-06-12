@@ -1,192 +1,202 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>PM Curves</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    .row { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; margin-bottom:12px; }
-    .col { flex:1; min-width:180px; }
-    label { display:block; font-size:0.9rem; margin-bottom:4px; }
-    input[type="text"], input[type="number"], select { width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; }
-    .small { font-size:0.85rem; color:#666; }
-    .actions { margin-top:14px; }
-    .note { margin-top:8px; font-size:0.85rem; color:#333; }
-  </style>
-</head>
-<body>
-<div class="container">
-  <h2>PM Curves</h2>
+{% extends "base.html" %}
+{% block title %}P–M Curves{% endblock %}
 
-  <form id="pmForm" action="{{ url_for('run_pm_curves') }}" method="post">
-    <div class="row">
-      <div class="col">
-        <label>Geometry</label>
-        <select id="geometry" name="geometry" onchange="onGeomChange()">
-          <option value="rectangular">Rectangular</option>
-          <option value="circular">Circular</option>
-          <option value="jacketed">Jacketed</option>
-        </select>
-      </div>
-
-      <div class="col">
-        <label>Plot type</label>
-        <select name="plot_type">
-          <option value="dimensional">Dimensional</option>
-          <option value="nondimensional">Non-dimensional</option>
-        </select>
-      </div>
-
-      <div class="col">
-        <label>Material</label>
-        <input name="fck" type="number" value="30" step="0.1" />
-        <div class="small">f<sub>ck</sub> (MPa)</div>
-        <input name="fy" type="number" value="415" step="1" style="margin-top:6px;" />
-        <div class="small">f<sub>y</sub> (MPa)</div>
-      </div>
-    </div>
-
-    <!-- Rectangular inputs -->
-    <div id="rect_inputs" class="row geom-block">
-      <div class="col">
-        <label>B (mm)</label>
-        <input name="b" type="number" value="300" />
-      </div>
-      <div class="col">
-        <label>D (mm)</label>
-        <input name="D" type="number" value="600" />
-      </div>
-      <div class="col">
-        <label>cover (mm)</label>
-        <input name="cover" type="number" value="40" />
-      </div>
-      <div class="col">
-        <label>bar_dia (mm)</label>
-        <input name="bar_dia" type="number" value="16" />
-      </div>
-      <div class="col">
-        <label>num_bars</label>
-        <input name="num_bars" type="number" value="8" />
-      </div>
-    </div>
-
-    <!-- Circular inputs -->
-    <div id="circ_inputs" class="row geom-block" style="display:none;">
-      <div class="col">
-        <label>D_circ (mm)</label>
-        <input name="D_circ" type="number" value="600" />
-      </div>
-      <div class="col">
-        <label>cover_c (mm)</label>
-        <input name="cover_c" type="number" value="40" />
-      </div>
-      <div class="col">
-        <label>bar_dia_c (mm)</label>
-        <input name="bar_dia_c" type="number" value="16" />
-      </div>
-      <div class="col">
-        <label>num_bars_c</label>
-        <input name="num_bars_c" type="number" value="8" />
-      </div>
-    </div>
-
-    <!-- Jacketed inputs -->
-    <div id="jacket_inputs" class="row geom-block" style="display:none;">
-      <div class="col">
-        <label>Core diameter D_core (mm)</label>
-        <input name="D_core" type="number" value="300" />
-      </div>
-      <div class="col">
-        <label>Jacket outer width B_j (mm)</label>
-        <input name="B_j" type="number" value="500" />
-      </div>
-      <div class="col">
-        <label>Jacket outer depth D_j (mm)</label>
-        <input name="D_j" type="number" value="600" />
-      </div>
-      <div class="col">
-        <label>core_cover (mm)</label>
-        <input name="core_cover" type="number" value="30" />
-      </div>
-      <div class="col">
-        <label>jacket_cover (mm)</label>
-        <input name="jacket_cover" type="number" value="40" />
-      </div>
-      <div class="col">
-        <label>core_bar_dia (mm)</label>
-        <input name="core_bar_dia" type="number" value="12" />
-      </div>
-      <div class="col">
-        <label>core_num_bars</label>
-        <input name="core_num_bars" type="number" value="6" />
-      </div>
-      <div class="col">
-        <label>jacket_bar_dia (mm)</label>
-        <input name="jacket_bar_dia" type="number" value="16" />
-      </div>
-      <div class="col">
-        <label>jacket_num_bars</label>
-        <input name="jacket_num_bars" type="number" value="8" />
-      </div>
-
-      <!-- Minimal additions: optional separate material inputs for core and jacket -->
-      <div class="col">
-        <label>Core f<sub>ck</sub> (MPa)</label>
-        <input name="fck_core" type="number" value="" step="0.1" placeholder="leave blank to use global fck" />
-        <div class="small">Optional — override global f<sub>ck</sub> for core</div>
-      </div>
-      <div class="col">
-        <label>Core f<sub>y</sub> (MPa)</label>
-        <input name="fy_core" type="number" value="" step="1" placeholder="leave blank to use global fy" />
-        <div class="small">Optional — override global f<sub>y</sub> for core</div>
-      </div>
-      <div class="col">
-        <label>Jacket f<sub>ck</sub> (MPa)</label>
-        <input name="fck_jacket" type="number" value="" step="0.1" placeholder="leave blank to use global fck" />
-        <div class="small">Optional — override global f<sub>ck</sub> for jacket</div>
-      </div>
-      <div class="col">
-        <label>Jacket f<sub>y</sub> (MPa)</label>
-        <input name="fy_jacket" type="number" value="" step="1" placeholder="leave blank to use global fy" />
-        <div class="small">Optional — override global f<sub>y</sub> for jacket</div>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="col">
-        <label>Enter Pu (kN) or non-dimensional Pu* (P/(fck·B·D)).</label>
-        <input name="Pu_input" placeholder="e.g., 100 or 0.1">
-        <div class="small">If Non-dimensional chosen, Pu_input is interpreted as P*.</div>
-      </div>
-      <div class="col">
-        <label>Es (MPa)</label>
-        <input name="Es" type="number" value="200000" />
-      </div>
-    </div>
-
-    <div class="actions">
-      <button class="button" type="submit">Generate PM Curve</button>
-      <a class="button" style="background:#28a745; margin-left:12px;" href="{{ url_for('index') }}">Cancel</a>
-    </div>
-
-    <div class="note">
-      Note: only inputs relevant to the chosen geometry are sent to the server.
-    </div>
-  </form>
+{% block content %}
+<div class="page-head">
+  <h1>P–M Interaction Curves</h1>
+  <p>
+    Describe the cross-section and materials, and ColumnLab will compute the full
+    axial-load/moment capacity envelope, mark the balanced-failure point, and — if you
+    provide a load point — interpolate the moment capacity and show the neutral axis on
+    the section.
+  </p>
 </div>
 
-<script>
-function q(sel){ return document.querySelector(sel); }
-function onGeomChange(){
-  const g = q('#geometry').value;
-  // hide all
-  document.querySelectorAll('.geom-block').forEach(el=>el.style.display='none');
-  if(g === 'rectangular'){ q('#rect_inputs').style.display = 'flex'; }
-  else if(g === 'circular'){ q('#circ_inputs').style.display = 'flex'; }
-  else if(g === 'jacketed'){ q('#jacket_inputs').style.display = 'flex'; }
-}
-// initialize
-onGeomChange();
-</script>
-</body>
-</html>
+{% if error %}
+<div class="error-box">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex:0 0 auto; margin-top:1px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+  <div><strong>Couldn’t generate the curve.</strong> {{ error }}</div>
+</div>
+{% endif %}
+
+<form id="pmForm" action="{{ url_for('run_pm_curves') }}" method="post"
+      data-busy data-busy-title="Generating P–M curve"
+      data-busy-msgs="Sweeping the neutral axis…|Integrating concrete stress blocks…|Locating the balanced failure point…|Rendering plots…">
+
+  <div class="pm-layout">
+    <div>
+      <div class="card">
+        <h3><span class="dot"></span>Geometry</h3>
+        <div class="seg" role="radiogroup" aria-label="Section geometry">
+          <input type="radio" id="g_rect" name="geometry" value="rectangular" checked>
+          <label for="g_rect">▭ Rectangular</label>
+          <input type="radio" id="g_circ" name="geometry" value="circular">
+          <label for="g_circ">◯ Circular</label>
+          <input type="radio" id="g_jack" name="geometry" value="jacketed">
+          <label for="g_jack">◉ Jacketed</label>
+        </div>
+
+        <!-- Rectangular inputs -->
+        <div id="rect_inputs" class="form-grid" style="margin-top:18px;">
+          <div class="field">
+            <label>Width B <span class="unit">(mm)</span></label>
+            <input name="b" type="number" value="300" min="50" step="any">
+          </div>
+          <div class="field">
+            <label>Depth D <span class="unit">(mm)</span></label>
+            <input name="D" type="number" value="600" min="50" step="any">
+          </div>
+          <div class="field">
+            <label>Cover <span class="unit">(mm)</span></label>
+            <input name="cover" type="number" value="40" min="10" step="any">
+          </div>
+          <div class="field">
+            <label>Bar diameter <span class="unit">(mm)</span></label>
+            <input name="bar_dia" type="number" value="16" min="6" step="any">
+          </div>
+          <div class="field">
+            <label>Number of bars</label>
+            <input name="num_bars" type="number" value="8" min="2" step="1">
+          </div>
+        </div>
+
+        <!-- Circular inputs -->
+        <div id="circ_inputs" class="form-grid hidden" style="margin-top:18px;">
+          <div class="field">
+            <label>Diameter D <span class="unit">(mm)</span></label>
+            <input name="D_circ" type="number" value="600" min="50" step="any">
+          </div>
+          <div class="field">
+            <label>Cover <span class="unit">(mm)</span></label>
+            <input name="cover_c" type="number" value="40" min="10" step="any">
+          </div>
+          <div class="field">
+            <label>Bar diameter <span class="unit">(mm)</span></label>
+            <input name="bar_dia_c" type="number" value="16" min="6" step="any">
+          </div>
+          <div class="field">
+            <label>Number of bars</label>
+            <input name="num_bars_c" type="number" value="8" min="2" step="1">
+          </div>
+        </div>
+
+        <!-- Jacketed inputs -->
+        <div id="jacket_inputs" class="hidden" style="margin-top:18px;">
+          <div class="form-grid">
+            <div class="field">
+              <label>Core diameter <span class="unit">(mm)</span></label>
+              <input name="D_core" type="number" value="300" min="50" step="any">
+            </div>
+            <div class="field">
+              <label>Jacket width B<sub>j</sub> <span class="unit">(mm)</span></label>
+              <input name="B_j" type="number" value="500" min="50" step="any">
+            </div>
+            <div class="field">
+              <label>Jacket depth D<sub>j</sub> <span class="unit">(mm)</span></label>
+              <input name="D_j" type="number" value="600" min="50" step="any">
+            </div>
+            <div class="field">
+              <label>Core cover <span class="unit">(mm)</span></label>
+              <input name="core_cover" type="number" value="30" min="10" step="any">
+            </div>
+            <div class="field">
+              <label>Jacket cover <span class="unit">(mm)</span></label>
+              <input name="jacket_cover" type="number" value="40" min="10" step="any">
+            </div>
+            <div class="field">
+              <label>Core bar ⌀ <span class="unit">(mm)</span></label>
+              <input name="core_bar_dia" type="number" value="12" min="6" step="any">
+            </div>
+            <div class="field">
+              <label>Core bars</label>
+              <input name="core_num_bars" type="number" value="6" min="2" step="1">
+            </div>
+            <div class="field">
+              <label>Jacket bar ⌀ <span class="unit">(mm)</span></label>
+              <input name="jacket_bar_dia" type="number" value="16" min="6" step="any">
+            </div>
+            <div class="field">
+              <label>Jacket bars</label>
+              <input name="jacket_num_bars" type="number" value="8" min="2" step="1">
+            </div>
+          </div>
+          <p class="muted" style="font-size:.82rem; margin:14px 0 8px;">
+            Optional: override the global materials separately for core and jacket.
+          </p>
+          <div class="form-grid">
+            <div class="field">
+              <label>Core f<sub>ck</sub> <span class="unit">(MPa)</span></label>
+              <input name="fck_core" type="number" step="any" placeholder="global">
+            </div>
+            <div class="field">
+              <label>Core f<sub>y</sub> <span class="unit">(MPa)</span></label>
+              <input name="fy_core" type="number" step="any" placeholder="global">
+            </div>
+            <div class="field">
+              <label>Jacket f<sub>ck</sub> <span class="unit">(MPa)</span></label>
+              <input name="fck_jacket" type="number" step="any" placeholder="global">
+            </div>
+            <div class="field">
+              <label>Jacket f<sub>y</sub> <span class="unit">(MPa)</span></label>
+              <input name="fy_jacket" type="number" step="any" placeholder="global">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="dot"></span>Materials</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label>Concrete f<sub>ck</sub> <span class="unit">(MPa)</span></label>
+            <input name="fck" type="number" value="30" min="5" step="any">
+            <div class="hint">Characteristic compressive strength</div>
+          </div>
+          <div class="field">
+            <label>Steel f<sub>y</sub> <span class="unit">(MPa)</span></label>
+            <input name="fy" type="number" value="415" min="50" step="any">
+            <div class="hint">Yield strength (any grade)</div>
+          </div>
+          <div class="field">
+            <label>Steel E<sub>s</sub> <span class="unit">(MPa)</span></label>
+            <input name="Es" type="number" value="200000" min="100000" step="1000">
+            <div class="hint">Elastic modulus</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="dot"></span>Output options</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label>Plot type</label>
+            <select name="plot_type">
+              <option value="dimensional">Dimensional (kN, kN·m)</option>
+              <option value="nondimensional">Non-dimensional (P*, M*)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Load point P <span class="unit">(optional)</span></label>
+            <input name="Pu_input" type="text" inputmode="decimal" placeholder="e.g. 1000">
+            <div class="hint" id="pu_hint">Axial load in kN, e.g. 1000</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn btn-primary" type="submit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Generate P–M Curve
+        </button>
+        <a class="btn btn-ghost" href="{{ url_for('index') }}">Cancel</a>
+      </div>
+    </div>
+
+    <aside class="card preview-card">
+      <h3><span class="dot"></span>Live section preview</h3>
+      <svg id="sectionPreview" viewBox="0 0 300 300" role="img" aria-label="Cross-section preview"></svg>
+      <div class="preview-stats" id="previewStats"></div>
+    </aside>
+  </div>
+</form>
+{% endblock %}

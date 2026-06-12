@@ -1,15 +1,81 @@
-<!doctype html>
-<html>
-<head><title>PM Curves & Probabilistic Analysis</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-<div class="container">
-  <h1>PM Curves & Probabilistic Analysis</h1>
-  <div style="margin-top:30px;">
-    <a class="button" href="{{ url_for('pm_curves') }}">PM Curves</a>
-    <a class="button" href="{{ url_for('probabilistic') }}">Probabilistic Analysis</a>
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <span class="eyebrow">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+    Structural analysis, instantly
+  </span>
+  <h1>Design &amp; assess RC columns<br>with <span class="grad">confidence</span></h1>
+  <p>
+    Generate P–M interaction curves for rectangular, circular and jacketed
+    reinforced-concrete columns, and quantify safety with Monte Carlo
+    reliability analysis — all in your browser.
+  </p>
+
+  <div class="feature-grid">
+    <a class="feature-card" href="{{ url_for('pm_curves') }}">
+      <div class="icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+          <path d="M4 20V4"/><path d="M4 20h16"/>
+          <path d="M5 5c8 0 13 4 14 14" stroke-dasharray="0"/>
+        </svg>
+      </div>
+      <h3>P–M Interaction Curves</h3>
+      <p>
+        Full axial-load vs. moment capacity envelopes with balanced-failure
+        detection, neutral-axis visualisation and load-point checks.
+        Supports rectangular, circular and jacketed (retrofitted) sections,
+        in dimensional or non-dimensional form.
+      </p>
+      <span class="cta">Generate a curve</span>
+      <svg class="mini-viz" width="130" height="110" viewBox="0 0 130 110" fill="none">
+        <path d="M10 10 C 70 12, 105 40, 100 70 C 97 88, 75 100, 45 102" stroke="#4f46e5" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="100" cy="70" r="6" fill="#f59e0b"/>
+      </svg>
+    </a>
+
+    <a class="feature-card" href="{{ url_for('probabilistic') }}">
+      <div class="icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="12" width="4" height="8" rx="1"/>
+          <rect x="10" y="6" width="4" height="14" rx="1"/>
+          <rect x="17" y="9" width="4" height="11" rx="1"/>
+        </svg>
+      </div>
+      <h3>Probabilistic Reliability</h3>
+      <p>
+        Treat material strengths and reinforcement ratio as random variables.
+        A Monte Carlo engine builds hundreds of capacity curves and maps the
+        reliability index β and failure probability P<sub>f</sub> over the
+        whole P–M demand space.
+      </p>
+      <span class="cta">Run a simulation</span>
+      <svg class="mini-viz" width="130" height="110" viewBox="0 0 130 110" fill="none">
+        <rect x="8" y="8" width="114" height="94" rx="8" fill="#4f46e5" opacity=".14"/>
+        <rect x="8" y="8" width="80" height="66" rx="8" fill="#0891b2" opacity=".25"/>
+        <rect x="8" y="8" width="48" height="40" rx="8" fill="#4f46e5" opacity=".4"/>
+      </svg>
+    </a>
   </div>
-</div>
-</body>
-</html>
+
+  <div class="steps">
+    <div class="step">
+      <span class="num">1</span>
+      <h4>Describe the column</h4>
+      <p>Geometry, cover, rebar layout and material grades — with a live cross-section preview.</p>
+    </div>
+    <div class="step">
+      <span class="num">2</span>
+      <h4>Pick the analysis</h4>
+      <p>Deterministic capacity envelope, or Monte Carlo sampling with your chosen coefficients of variation.</p>
+    </div>
+    <div class="step">
+      <span class="num">3</span>
+      <h4>Read the results</h4>
+      <p>Interactive plots, balanced-failure points, β heatmaps and a downloadable fragility grid.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
